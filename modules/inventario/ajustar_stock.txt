@@ -1,0 +1,67 @@
+<?php
+session_start();
+require_once '../../config/conexion.php';
+
+// Validar que el usuario haya iniciado sesión
+if (!isset($_SESSION['usuario_id'])) {
+    header('Location: ../../login.php');
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $producto_id     = (int)($_POST['producto_id'] ?? 0);
+    $tipo_movimiento = trim($_POST['tipo_movimiento'] ?? '');
+    $cantidad        = (int)($_POST['cantidad'] ?? 0);
+
+    if ($producto_id <= 0 || $cantidad <= 0 || !in_array($tipo_movimiento, ['entrada', 'salida', 'ajuste'])) {
+        header('Location: ../../index.php?page=inventario&error=datos_invalidos');
+        exit();
+    }
+
+    try {
+        $db = Database::conectar();
+
+        // 1. Obtener el stock actual del producto
+        $stmt = $db->prepare("SELECT stock_actual, stock FROM productos WHERE id = ? LIMIT 1");
+        $stmt->execute([$producto_id]);
+        $producto = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$producto) {
+            header('Location: ../../index.php?page=inventario&error=producto_no_encontrado');
+            exit();
+        }
+
+        // Determinar la columna utilizada para el stock
+        $stock_actual = isset($producto['stock_actual']) ? (int)$producto['stock_actual'] : (int)($producto['stock'] ?? 0);
+        $nuevo_stock  = $stock_actual;
+
+        // 2. Calcular nuevo stock según tipo de movimiento
+        if ($tipo_movimiento === 'entrada') {
+            $nuevo_stock = $stock_actual + $cantidad;
+        } elseif ($tipo_movimiento === 'salida') {
+            $nuevo_stock = max(0, $stock_actual - $cantidad);
+        } elseif ($tipo_movimiento === 'ajuste') {
+            $nuevo_stock = $cantidad;
+        }
+
+        // 3. Actualizar en la base de datos (Soporta ambas nomenclaturas de columna)
+        if (isset($producto['stock_actual'])) {
+            $sql = "UPDATE productos SET stock_actual = ?, ultimo_movimiento = NOW() WHERE id = ?";
+        } else {
+            $sql = "UPDATE productos SET stock = ?, ultimo_movimiento = NOW() WHERE id = ?";
+        }
+
+        $stmt_update = $db->prepare($sql);
+        $stmt_update->execute([$nuevo_stock, $producto_id]);
+
+        header('Location: ../../index.php?page=inventario&status=stock_actualizado');
+        exit();
+
+    } catch (Exception $e) {
+        die("Error al actualizar el stock: " . $e->getMessage());
+    }
+} else {
+    header('Location: ../../index.php?page=inventario');
+    exit();
+}
+?>

@@ -1,0 +1,24 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Database exports and local database files
+*.sql
+!database/schema.sql
+!database/seed.sql
+*.sql.gz
+*.dump
+*.bak
+/DOCUMENTACION/
+/deploygit/
+
+# Runtime and editor artifacts
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Empty editor placeholders
+**/Nuevo documento de texto.txt
+
